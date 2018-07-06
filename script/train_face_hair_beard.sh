@@ -1,0 +1,1 @@
+python train.py --dataroot ~/datasets/celeba_crop/img_align_celeba/ --name face_hair_beard --model cycle_gan --dataset_mode unaligned_fromlist --img_list_A img_list_blackhair_mustache.txt --img_list_B img_list_blondhair_nobeard.txt --no_dropout --gpu_ids 0,1,2,3 --batchSize 4 --lambda_identity 0
