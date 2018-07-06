@@ -29,8 +29,8 @@ class CycleGANModel(BaseModel):
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         #visual_names_A = ['real_A', 'fake_B', 'rec_A'] # rui
         #visual_names_B = ['real_B', 'fake_A', 'rec_B'] # rui
-        visual_names_A = ['real_A', 'fake_B', 'rec_A', 'diff_B'] # rui
-        visual_names_B = ['real_B', 'fake_A', 'rec_B', 'diff_A'] # rui
+        visual_names_A = ['real_A', 'fake_B', 'rec_A', 'diff_B_1', 'diff_B_2'] # rui
+        visual_names_B = ['real_B', 'fake_A', 'rec_B', 'diff_A_1', 'diff_A_2'] # rui
         if self.isTrain and self.opt.lambda_identity > 0.0:
             visual_names_A.append('idt_A')
             visual_names_B.append('idt_B')
@@ -45,10 +45,18 @@ class CycleGANModel(BaseModel):
         # load/define networks
         # The naming conversion is different from those used in the paper
         # Code (paper): G_A (G), G_B (F), D_A (D_Y), D_B (D_X)
-        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc,
+        # rui edit start
+        self.netG_A = networks.define_G(opt.input_nc, opt.output_nc*2,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
-        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc,
+        self.netG_B = networks.define_G(opt.output_nc, opt.input_nc*2,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        #self.netG_A = networks.define_G(opt.input_nc, opt.output_nc,
+        #                                opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        #self.netG_B = networks.define_G(opt.output_nc, opt.input_nc,
+        #                                opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        # rui edit end
+
+        self.output_nc = opt.output_nc # rui
 
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
@@ -82,17 +90,29 @@ class CycleGANModel(BaseModel):
     def forward(self):
         # rui edit start
         self.diff_B = self.netG_A(self.real_A)
-        self.fake_B = self.diff_B + self.real_A
+        self.diff_B_1, self.diff_B_2 = torch.split(self.diff_B, self.output_nc, dim=1)
+        self.diff_B_1 = torch.clamp(self.diff_B_1, -1.0, 1.0)
+        self.diff_B_2 = torch.clamp(self.diff_B_2, -1.0, 1.0)
+        self.fake_B = self.diff_B_1 + self.diff_B_2 + self.real_A
         self.fake_B = torch.clamp(self.fake_B, -1.0, 1.0)
         self.diff_B_rec = self.netG_B(self.fake_B)
-        self.rec_A = self.diff_B_rec + self.fake_B
+        self.diff_B_rec_1, self.diff_B_rec_2 = torch.split(self.diff_B_rec, self.output_nc, dim=1)
+        self.diff_B_rec_1 = torch.clamp(self.diff_B_rec_1, -1.0, 1.0)
+        self.diff_B_rec_2 = torch.clamp(self.diff_B_rec_2, -1.0, 1.0)
+        self.rec_A = self.diff_B_rec_1 + self.diff_B_rec_2 + self.fake_B
         self.rec_A = torch.clamp(self.rec_A, -1.0, 1.0)
 
         self.diff_A = self.netG_B(self.real_B)
-        self.fake_A = self.diff_A + self.real_B
+        self.diff_A_1, self.diff_A_2 = torch.split(self.diff_A, self.output_nc, dim=1)
+        self.diff_A_1 = torch.clamp(self.diff_A_1, -1.0, 1.0)
+        self.diff_A_2 = torch.clamp(self.diff_A_2, -1.0, 1.0)
+        self.fake_A = self.diff_A_1 + self.diff_A_2 + self.real_B
         self.fake_A = torch.clamp(self.fake_A, -1.0, 1.0)
         self.diff_A_rec = self.netG_A(self.fake_A)
-        self.rec_B = self.diff_A_rec + self.fake_A
+        self.diff_A_rec_1, self.diff_A_rec_2 = torch.split(self.diff_A_rec, self.output_nc, dim=1)
+        self.diff_A_rec_1 = torch.clamp(self.diff_A_rec_1, -1.0, 1.0)
+        self.diff_A_rec_2 = torch.clamp(self.diff_A_rec_2, -1.0, 1.0)
+        self.rec_B = self.diff_A_rec_1 + self.diff_A_rec_2 + self.fake_A
         self.rec_B = torch.clamp(self.rec_B, -1.0, 1.0)
 
         #self.fake_B = self.netG_A(self.real_A)
